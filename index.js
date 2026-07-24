@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import path from 'node:path';
@@ -45,7 +46,7 @@ Options:
   -h, --help             Show this help
 
 Environment:
-  CURSOR_API_KEY (required)   see .env.example
+  CURSOR_API_KEY (required except --from-plan --dry-run)   see .env.example
 
 The tool operates on the git repository containing the current directory.`;
 
@@ -66,7 +67,8 @@ async function main() {
   }
 
   const settings = mergeSettings(config, args);
-  if (!settings.apiKey) {
+  const needsApiKey = !(args.dryRun && args.fromPlan);
+  if (needsApiKey && !settings.apiKey) {
     throw new Error('CURSOR_API_KEY is not set. Copy .env.example to .env and add your key.');
   }
   if (!args.fromPlan && !args.goal) {
@@ -76,7 +78,7 @@ async function main() {
   const repo = await repoRoot(process.cwd());
   const baseRef = args.base || (await currentBranch(repo)) || (await revParse('HEAD', repo));
   const baseSha = await revParse(baseRef, repo);
-  const runId = `run-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`;
+  const runId = makeRunId();
 
   log.heading(`agent-swarm v${await getVersion()} - ${runId}`);
   log.info(`repo:        ${repo}`);
@@ -96,11 +98,13 @@ async function main() {
   let decisions;
 
   if (args.fromPlan) {
-    const saved = JSON.parse(await readFile(args.fromPlan, 'utf8'));
-    goal = saved.goal;
-    tree = saved.tree;
-    decisions = saved.decisions || [];
+    ({ goal, tree, decisions } = await loadPlan(args.fromPlan));
     log.step(`Loaded plan from ${args.fromPlan}`);
+    await writeFile(
+      path.join(runDir, 'plan.json'),
+      JSON.stringify({ goal, decisions, tree }, null, 2),
+      'utf8',
+    );
   } else {
     goal = args.goal;
     const plannerModel = await resolvePlannerModel(settings.apiKey, settings.plannerModel);
@@ -162,69 +166,73 @@ async function main() {
   // ---- Execution phase ----
   const integrationBranch = `swarm/${runId}/integration`;
   const integrationWorktree = path.join(worktreeBase, 'integration');
-  await addWorktree(repo, integrationWorktree, integrationBranch, baseSha);
-  await initSharedContext(integrationWorktree, goal, decisions);
+  try {
+    await addWorktree(repo, integrationWorktree, integrationBranch, baseSha);
+    await initSharedContext(integrationWorktree, goal, decisions);
 
-  const results = new Map();
-  const leafById = new Map(schedule.leaves.map((l) => [l.id, l]));
-  const limit = pLimit(settings.concurrency);
+    const results = new Map();
+    const leafById = new Map(schedule.leaves.map((l) => [l.id, l]));
+    const limit = pLimit(settings.concurrency);
 
-  for (let w = 0; w < schedule.waves.length; w += 1) {
-    const wave = schedule.waves[w];
-    log.heading(`Wave ${w + 1}/${schedule.waves.length} - ${wave.length} task(s)`);
-    const waveBaseSha = await revParse('HEAD', integrationWorktree);
-    const shared = await readSharedContext(integrationWorktree);
+    for (let w = 0; w < schedule.waves.length; w += 1) {
+      const wave = schedule.waves[w];
+      log.heading(`Wave ${w + 1}/${schedule.waves.length} - ${wave.length} task(s)`);
+      const waveBaseSha = await revParse('HEAD', integrationWorktree);
+      const shared = await readSharedContext(integrationWorktree);
 
-    // Create isolated worktrees for each leaf in the wave.
-    const items = [];
-    for (const leafId of wave) {
-      const leaf = leafById.get(leafId);
-      const safe = safeName(leafId);
-      const branch = `swarm/${runId}/${safe}`;
-      const worktree = path.join(worktreeBase, safe);
-      await addWorktree(repo, worktree, branch, waveBaseSha);
-      items.push({ leaf, branch, worktree });
-    }
+      // Create isolated worktrees for each leaf in the wave.
+      const items = [];
+      try {
+        for (const leafId of wave) {
+          const leaf = leafById.get(leafId);
+          const safe = safeName(leafId);
+          const branch = `swarm/${runId}/${safe}`;
+          const worktree = path.join(worktreeBase, safe);
+          await addWorktree(repo, worktree, branch, waveBaseSha);
+          items.push({ leaf, branch, worktree });
+        }
 
-    // Run workers (and review) in parallel within the wave.
-    await Promise.all(
-      items.map((item) =>
-        limit(async () => {
-          const r = await executeLeaf({ item, waveBaseSha, shared, settings, cost });
-          results.set(item.leaf.id, r);
-        }),
-      ),
-    );
+        // Run workers (and review) in parallel within the wave.
+        await Promise.all(
+          items.map((item) =>
+            limit(async () => {
+              const r = await executeLeaf({ item, waveBaseSha, shared, settings, cost });
+              results.set(item.leaf.id, r);
+            }),
+          ),
+        );
 
-    // Merge passed leaves into integration sequentially (deterministic order).
-    for (const item of items) {
-      const r = results.get(item.leaf.id);
-      if (!r.passed) {
-        log.worker(item.leaf.id, log.color.yellow(`skipped merge (${r.reason})`));
-        continue;
+        // Merge passed leaves into integration sequentially (deterministic order).
+        for (const item of items) {
+          const r = results.get(item.leaf.id);
+          if (!r.passed) {
+            log.worker(item.leaf.id, log.color.yellow(`skipped merge (${r.reason})`));
+            continue;
+          }
+          await mergeLeaf({ item, integrationWorktree, settings, shared, cost, results });
+        }
+
+        // Fold field-guide notes from this wave into shared context.
+        for (const item of items) {
+          const r = results.get(item.leaf.id);
+          if (r.merged && r.notes) {
+            await appendFieldGuideNotes(integrationWorktree, item.leaf.id, r.notes, settings.fieldGuideLineBudget);
+          }
+        }
+      } finally {
+        // Always clean up wave worktrees (branches kept only for failures / --keep-worktrees).
+        for (const item of items) {
+          const r = results.get(item.leaf.id);
+          await removeWorktree(repo, item.worktree, { force: true });
+          if (!settings.keepWorktrees && r?.merged) await deleteBranch(repo, item.branch);
+        }
       }
-      await mergeLeaf({ item, integrationWorktree, settings, shared, cost, results });
     }
 
-    // Fold field-guide notes from this wave into shared context.
-    for (const item of items) {
-      const r = results.get(item.leaf.id);
-      if (r.merged && r.notes) {
-        await appendFieldGuideNotes(integrationWorktree, item.leaf.id, r.notes, settings.fieldGuideLineBudget);
-      }
-    }
-
-    // Clean up wave worktrees (branches kept only for failures / --keep-worktrees).
-    for (const item of items) {
-      const r = results.get(item.leaf.id);
-      await removeWorktree(repo, item.worktree, { force: true });
-      if (!settings.keepWorktrees && r.merged) await deleteBranch(repo, item.branch);
-    }
+    printSummary({ results, integrationBranch, baseRef, runDir, repo, settings });
+  } finally {
+    await removeWorktree(repo, integrationWorktree, { force: true });
   }
-
-  await removeWorktree(repo, integrationWorktree, { force: true });
-
-  printSummary({ results, integrationBranch, baseRef, runDir, repo, settings });
   cost.print();
 }
 
@@ -412,7 +420,16 @@ function parseArgs(argv) {
   const out = { goalParts: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
-    const next = () => argv[(i += 1)];
+    const nextValue = (flag) => {
+      const v = argv[(i += 1)];
+      if (v === undefined || v === '') {
+        throw new Error(`Missing value for ${flag}`);
+      }
+      if (v.startsWith('-')) {
+        throw new Error(`Invalid value for ${flag}: ${v}`);
+      }
+      return v;
+    };
     switch (a) {
       case '-h':
       case '--help': out.help = true; break;
@@ -421,13 +438,17 @@ function parseArgs(argv) {
       case '--yes': out.yes = true; break;
       case '--no-review': out.noReview = true; break;
       case '--keep-worktrees': out.keepWorktrees = true; break;
-      case '--max-depth': out.maxDepth = int(next()); break;
-      case '--max-leaves': out.maxLeaves = int(next()); break;
-      case '--concurrency': out.concurrency = int(next()); break;
-      case '--base': out.base = next(); break;
-      case '--planner-model': out.plannerModel = next(); break;
-      case '--worker-model': out.workerModel = next(); break;
-      case '--from-plan': out.fromPlan = next(); break;
+      case '--max-depth': out.maxDepth = int(nextValue('--max-depth'), { min: 0 }); break;
+      case '--max-leaves': out.maxLeaves = int(nextValue('--max-leaves'), { min: 1 }); break;
+      case '--concurrency': out.concurrency = int(nextValue('--concurrency'), { min: 1 }); break;
+      case '--base': out.base = nextValue('--base'); break;
+      case '--planner-model': out.plannerModel = nextValue('--planner-model'); break;
+      case '--worker-model': out.workerModel = nextValue('--worker-model'); break;
+      case '--from-plan': out.fromPlan = nextValue('--from-plan'); break;
+      case '--':
+        out.goalParts.push(...argv.slice(i + 1));
+        i = argv.length;
+        break;
       default:
         if (a.startsWith('--')) throw new Error(`Unknown option: ${a}`);
         out.goalParts.push(a);
@@ -437,14 +458,70 @@ function parseArgs(argv) {
   return out;
 }
 
-function int(v) {
+function int(v, { min } = {}) {
   const n = Number.parseInt(v, 10);
   if (Number.isNaN(n)) throw new Error(`Expected a number, got "${v}"`);
+  if (min !== undefined && n < min) {
+    throw new Error(`Expected a number >= ${min}, got ${n}`);
+  }
   return n;
 }
 
+/**
+ * Map a leaf id to a unique, git-ref-safe path/branch segment.
+ * A short hash of the original id keeps the mapping injective even when
+ * sanitization would otherwise collide (e.g. "a/b" vs "a b").
+ */
 function safeName(id) {
-  return id.replace(/[^a-zA-Z0-9._-]/g, '__');
+  const hash = createHash('sha1').update(String(id)).digest('hex').slice(0, 8);
+  let base = String(id)
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/\.\.+/g, '-')
+    .replace(/^\.+|\.+$/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!base) base = 'leaf';
+  // Keep path segments reasonably short while remaining unique via the hash.
+  if (base.length > 40) base = base.slice(0, 40).replace(/\.+$/g, '').replace(/-+$/g, '') || 'leaf';
+  return `${base}-${hash}`;
+}
+
+function makeRunId() {
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17);
+  const suffix = randomBytes(3).toString('hex');
+  return `run-${stamp}-${suffix}`;
+}
+
+async function loadPlan(planPath) {
+  let raw;
+  try {
+    raw = await readFile(planPath, 'utf8');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      throw new Error(`Failed to load plan from ${planPath}: file not found`);
+    }
+    throw new Error(`Failed to load plan from ${planPath}: ${err.message}`);
+  }
+
+  let saved;
+  try {
+    saved = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`Failed to load plan from ${planPath}: invalid JSON (${err.message})`);
+  }
+
+  if (typeof saved?.goal !== 'string' || !saved.goal.trim()) {
+    throw new Error(`Plan from ${planPath} is missing a non-empty "goal" string`);
+  }
+  if (!Array.isArray(saved.tree)) {
+    throw new Error(`Plan from ${planPath} is missing a "tree" array`);
+  }
+
+  return {
+    goal: saved.goal.trim(),
+    tree: saved.tree,
+    decisions: Array.isArray(saved.decisions) ? saved.decisions : [],
+  };
 }
 
 function firstLine(s) {
