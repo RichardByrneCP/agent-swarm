@@ -123,7 +123,7 @@ async function main() {
       decisions = expanded.decisions;
       for (const u of expanded.plannerUsages) cost.add(u);
     } finally {
-      await removeWorktree(repo, planningWorktree);
+      await removeWorktree(repo, planningWorktree, { force: true });
     }
 
     await writeFile(
@@ -217,12 +217,12 @@ async function main() {
     // Clean up wave worktrees (branches kept only for failures / --keep-worktrees).
     for (const item of items) {
       const r = results.get(item.leaf.id);
-      await removeWorktree(repo, item.worktree);
+      await removeWorktree(repo, item.worktree, { force: true });
       if (!settings.keepWorktrees && r.merged) await deleteBranch(repo, item.branch);
     }
   }
 
-  await removeWorktree(repo, integrationWorktree);
+  await removeWorktree(repo, integrationWorktree, { force: true });
 
   printSummary({ results, integrationBranch, baseRef, runDir, repo, settings });
   cost.print();
