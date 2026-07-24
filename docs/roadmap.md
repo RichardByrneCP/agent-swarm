@@ -55,7 +55,7 @@ Always start with `--dry-run`. Abort if the tree is one giant leaf or scopes hea
 
 ### Highest leverage
 
-1. **Live progress** — Stream worker/reviewer heartbeats (last tool/file touch) so long runs don’t look stuck.
+1. **Live progress** — ~~Stream worker/reviewer heartbeats (last tool/file touch) so long runs don’t look stuck.~~ **Done** (`feat/live-progress`: `Agent.create` + `run.stream`, idle heartbeats; `SWARM_PROGRESS=0` to disable).
 2. **Resume / checkpoint** — Persist wave state; restart from the last successful leaf after failure.
 3. **Plan edit gate** — After dry-run, make editing `plan.json` (or a small TUI) the default path before `--yes`.
 
@@ -79,7 +79,7 @@ Always start with `--dry-run`. Abort if the tree is one giant leaf or scopes hea
 
 ### Suggested order
 
-1. Resume + live progress  
-2. Productize audit → fix  
-3. GitHub draft-PR integration  
-4. CI smoke tests for parsing/scheduling helpers  
+1. ~~Resume + live progress~~ → live progress shipped; resume/checkpoint next
+2. Productize audit → fix
+3. GitHub draft-PR integration
+4. CI smoke tests for parsing/scheduling helpers 
