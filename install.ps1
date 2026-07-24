@@ -27,9 +27,15 @@ Write-Host 'Installing dependencies...'
 Push-Location $ToolDir
 try {
   npm install --no-fund --no-audit
+  if ($LASTEXITCODE -ne 0) {
+    throw "npm install failed with exit code $LASTEXITCODE"
+  }
   # 3. Link the global 'agent-swarm' command
   Write-Host "Linking global command 'agent-swarm'..."
   npm link
+  if ($LASTEXITCODE -ne 0) {
+    throw "npm link failed with exit code $LASTEXITCODE"
+  }
 } finally {
   Pop-Location
 }
@@ -45,5 +51,5 @@ Write-Host '  Try:  agent-swarm --version'
 Write-Host '        agent-swarm "<your goal>" --dry-run'
 Write-Host ''
 if (-not $env:CURSOR_API_KEY -and -not (Test-Path (Join-Path $ToolDir '.env'))) {
-  Write-Host "Next: set CURSOR_API_KEY (copy $ToolDir\.env.example to .env, or set the env var)."
+  Write-Host "Next: set CURSOR_API_KEY — copy $ToolDir\.env.example to $ToolDir\.env (loaded as a fallback from any cwd), place a .env in the target repo, or setx CURSOR_API_KEY `"...`"."
 }

@@ -9,13 +9,14 @@ Front door to the globally-installed `agent-swarm` command: a frontier planner (
 
 ## Resolve the command
 
-Use `agent-swarm` if it is on PATH. If not found, fall back to `"$AGENT_SWARM_HOME/index.js"` (default `~/.cursor/agent-swarm/index.js`) invoked with `node`. If neither exists, tell the user to run the tool's `install.sh`.
+Use `agent-swarm` if it is on PATH. If not found, fall back to `"$AGENT_SWARM_HOME/index.js"` invoked with `node`, where `AGENT_SWARM_HOME` must point at the clone you installed from (common convention: `~/.cursor/agent-swarm`, but only if you actually cloned there). If neither exists, tell the user to re-run the installer from the tool directory: `./install.sh` (macOS/Linux/WSL/Git Bash) or `powershell -ExecutionPolicy Bypass -File .\install.ps1` (native Windows).
 
 ## Preflight (check once per run)
 
 1. Node >= 22.13 (`node -v`). If lower, stop and tell the user to upgrade (e.g. `nvm use 22`).
-2. `CURSOR_API_KEY` set (env or the tool's `.env`). If missing, point to `.env.example`.
+2. `CURSOR_API_KEY` set (environment, a `.env` in the target repo cwd, or `.env` in the tool package directory). If missing, point to `.env.example`.
 3. Run from inside the git repo the swarm should work on. It creates a separate `swarm/<runId>/integration` branch and never merges into the current branch automatically.
+4. Prefer that the target repo gitignores `.swarm-worktrees/`, `.swarm-runs/`, and `.env`.
 
 ## Workflow
 
@@ -25,7 +26,7 @@ Copy this checklist and track progress:
 - [ ] Preflight passed (Node >= 22.13, API key set, inside target repo)
 - [ ] Confirmed goal and flags with the user
 - [ ] Dry run: reviewed task tree + wave schedule
-- [ ] Confirmed cost/scope, then full run with --yes
+- [ ] Confirmed cost/scope, then full run (prompt or --yes)
 - [ ] Reported integration branch + how to review/merge
 ```
 
@@ -37,7 +38,7 @@ agent-swarm "<goal>" --dry-run
 
 Show the user the task tree, the leaf/wave counts, and the saved `plan.json` path.
 
-**Step 2 - Confirm, then run for real.** A real run spawns many paid agents and requires `--yes`. Only add `--yes` after the user explicitly confirms.
+**Step 2 - Confirm, then run for real.** A real run spawns many paid agents. On a TTY the CLI prompts `[y/N]`; use `--yes` to skip the prompt (required in non-interactive contexts / when invoked by this skill). Only proceed after the user explicitly confirms.
 
 ```bash
 agent-swarm "<goal>" [flags] --yes

@@ -45,5 +45,5 @@ echo "  Try:  agent-swarm --version"
 echo "        agent-swarm \"<your goal>\" --dry-run"
 echo
 if [ -z "${CURSOR_API_KEY:-}" ] && [ ! -f "$TOOL_DIR/.env" ]; then
-  echo "Next: set CURSOR_API_KEY (copy $TOOL_DIR/.env.example to .env, or export it)."
+  echo "Next: set CURSOR_API_KEY — copy $TOOL_DIR/.env.example to $TOOL_DIR/.env (loaded as a fallback from any cwd), place a .env in the target repo, or export CURSOR_API_KEY."
 fi
