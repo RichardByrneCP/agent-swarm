@@ -1,0 +1,24 @@
+{
+  "name": "agent-swarm",
+  "version": "0.1.0",
+  "description": "A local planner/worker agent swarm built on the Cursor SDK. A frontier planner (Opus) recursively decomposes a goal into a task tree; fast workers (Composer) execute each leaf in isolated git worktrees, with review and merge-reconciliation stages.",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "agent-swarm": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "swarm": "node index.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@cursor/sdk": "^1.0.24",
+    "dotenv": "^16.4.5",
+    "p-limit": "^7.3.1"
+  }
+}
