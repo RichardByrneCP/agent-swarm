@@ -1,4 +1,13 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Load .env from the process CWD first (per-project keys), then fall back to the
+// tool package directory so a key stored next to the install still works when
+// you `cd` into a target repo.
+const packageDir = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config();
+dotenv.config({ path: path.join(packageDir, '.env') });
 
 const intEnv = (name, fallback) => {
   const raw = process.env[name];

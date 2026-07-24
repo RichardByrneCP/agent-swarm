@@ -46,10 +46,20 @@ Both installers check your Node version, install dependencies, link the global `
 Then set your API key (get one at [Cursor Dashboard -> Integrations](https://cursor.com/dashboard/integrations)):
 
 ```bash
-cp .env.example .env   # then add your CURSOR_API_KEY   (or set the CURSOR_API_KEY env var)
+cp .env.example .env   # in the tool directory, then add your CURSOR_API_KEY
+# or: export CURSOR_API_KEY=...   /   setx CURSOR_API_KEY "..."
+# or: put a .env in the target repo you run from
 ```
 
-On Windows PowerShell: `Copy-Item .env.example .env` then edit it, or `setx CURSOR_API_KEY "..."`.
+`config.js` loads `.env` from the **current working directory first**, then falls back to the **tool package directory**, so a key stored next to the install works when you `cd` into another repo. On Windows PowerShell: `Copy-Item .env.example .env` then edit it.
+
+Before the first run in a target repository, add these ignores (the tool writes them under that repo):
+
+```gitignore
+.swarm-worktrees/
+.swarm-runs/
+.env
+```
 
 ## Usage
 
@@ -59,7 +69,8 @@ Run from inside the git repo you want the swarm to work on:
 # Plan only - see the task tree and wave schedule, do no work
 agent-swarm "Add request rate limiting to the public API" --dry-run
 
-# Full run (a real run spawns paid agents and requires --yes)
+# Full run (on a TTY you can confirm interactively; use --yes to skip the prompt /
+# required in non-interactive contexts)
 agent-swarm "Add request rate limiting to the public API" --yes
 
 # Larger task: deeper tree, more workers
@@ -135,8 +146,9 @@ To share with teammates or other teams:
 Notes for wider use:
 
 - **Model access:** the planner auto-detects the latest Opus. If a teammate lacks Opus access, they set `PLANNER_MODEL` to a model they can use. Workers default to `composer-2.5`.
-- **Cost:** every worker is a paid agent. Real runs require `--yes`, and the skill always does a `--dry-run` first. Use `--max-leaves` to cap fan-out.
-- **Updates:** `agent-swarm --version` reports the installed version. Re-run `./install.sh` after pulling changes.
+- **Cost:** every worker is a paid agent. On a TTY the CLI prompts before a paid run; use `--yes` to skip the prompt (required in non-interactive contexts). The skill always does a `--dry-run` first. Use `--max-leaves` to cap fan-out.
+- **Updates:** `agent-swarm --version` reports the installed version. After pulling changes, re-run `./install.sh` (macOS/Linux/WSL/Git Bash) or `powershell -ExecutionPolicy Bypass -File .\install.ps1` (native Windows).
+- **Shared context:** `.swarm/` (design decisions + field guide) is committed on the run's integration branch so workers can read it. Exclude it at merge time if you do not want it on your mainline.
 
 ## Notes / assumptions
 
