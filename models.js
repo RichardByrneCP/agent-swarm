@@ -59,7 +59,16 @@ function normalizeModelIds(models) {
 }
 
 function pickLatest(ids, needle) {
-  const matches = ids.filter((id) => id.toLowerCase().includes(needle));
+  // Prefer known Cursor/Anthropic planner ids (e.g. claude-opus-*) over any
+  // unrelated id that merely contains the substring "opus".
+  const strict = ids.filter((id) => /^claude[-.].*opus/i.test(id));
+  const matches = strict.length
+    ? strict
+    : ids.filter((id) => {
+        const lower = id.toLowerCase();
+        if (needle === 'opus') return /(^|[-_/])opus([-_/]|$)/.test(lower);
+        return lower.includes(needle);
+      });
   if (matches.length === 0) return null;
   // Sort so the highest version string sorts last; numeric-aware compare.
   matches.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
