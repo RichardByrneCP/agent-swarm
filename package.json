@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "swarm": "node index.js"
+    "swarm": "node index.js",
+    "test": "node test/progress.test.mjs"
   },
   "engines": {
     "node": ">=22.13"
