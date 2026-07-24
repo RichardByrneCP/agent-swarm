@@ -21,19 +21,35 @@ This folder is self-contained and portable. It installs as a global `agent-swarm
 
 ## Install
 
-Requires **Node >= 22.13** and git. From the tool directory:
+Requires **Node >= 22.13** and git.
+
+### macOS / Linux
+
+From the tool directory:
 
 ```bash
 ./install.sh
 ```
 
-This checks your Node version, installs dependencies, links the global `agent-swarm` command, and installs the personal skill into `~/.cursor/skills/agent-swarm/`.
+### Windows
+
+Native PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Or, if you work in **WSL2** or **Git Bash**, use the macOS/Linux `./install.sh` instead (recommended if you're unsure - the local runtime is best-tested on a Unix shell).
+
+Both installers check your Node version, install dependencies, link the global `agent-swarm` command, and install the personal skill into `~/.cursor/skills/agent-swarm/` (`%USERPROFILE%\.cursor\skills\agent-swarm\` on Windows).
 
 Then set your API key (get one at [Cursor Dashboard -> Integrations](https://cursor.com/dashboard/integrations)):
 
 ```bash
-cp .env.example .env   # then add your CURSOR_API_KEY   (or export CURSOR_API_KEY)
+cp .env.example .env   # then add your CURSOR_API_KEY   (or set the CURSOR_API_KEY env var)
 ```
+
+On Windows PowerShell: `Copy-Item .env.example .env` then edit it, or `setx CURSOR_API_KEY "..."`.
 
 ## Usage
 
@@ -112,7 +128,7 @@ goal
 To share with teammates or other teams:
 
 1. Give them this folder (clone the repo, or copy it) into a central location, e.g. `~/.cursor/agent-swarm`.
-2. They run `./install.sh` (checks Node, installs deps, links the `agent-swarm` command, installs the personal skill).
+2. They run `./install.sh` (macOS/Linux/WSL/Git Bash) or `install.ps1` (native Windows PowerShell): checks Node, installs deps, links the `agent-swarm` command, installs the personal skill.
 3. They set their own `CURSOR_API_KEY` (never commit `.env`; it is gitignored). For CI, use a team service-account key.
 4. They can now run `agent-swarm ...` from any repo, or just ask Cursor to "run an agent swarm to ...".
 
@@ -125,6 +141,7 @@ Notes for wider use:
 ## Notes / assumptions
 
 - Requires **Node >= 22.13** (a `@cursor/sdk` requirement) and git.
+- Cross-platform (macOS, Linux, Windows). The code uses no shell or POSIX-only paths; only the installers differ per OS. The SDK local runtime is best-tested on Unix shells, so on Windows prefer WSL2 if you hit anything unexpected.
 - Runs locally against your machine's environment. Agents use inline config only (`settingSources: []`), so project/user rules are not loaded by default.
 - Workers are told to stay within their `fileScope`; an essential out-of-scope change must be minimal and marked with a `SWARM-BREAKING:` comment (mirrors the article's "licensed breakage").
 - The `.swarm/` directory (design decisions + field guide) lives only on the run's integration branch.
