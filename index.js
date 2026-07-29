@@ -36,6 +36,7 @@ Options:
   --concurrency <n>      Parallel workers per wave (default ${config.concurrency})
   --base <ref>           Base git ref to branch from (default: current HEAD)
   --planner-model <id>   Override the planner model (default: auto-detect latest Opus)
+  --planner-effort <lvl> Planner reasoning effort (e.g. low|medium|high|xhigh|max; model-specific)
   --worker-model <id>    Override the worker model (default ${config.workerModel})
   --no-review            Skip the review stage
   --dry-run              Plan only: print the task tree + wave schedule, do no work
@@ -84,6 +85,9 @@ async function main() {
   log.info(`repo:        ${repo}`);
   log.info(`base ref:    ${baseRef} (${baseSha.slice(0, 10)})`);
   log.info(`depth<=${settings.maxDepth}  leaves<=${settings.maxLeaves}  concurrency=${settings.concurrency}  review=${settings.reviewEnabled}`);
+  if (settings.plannerEffort) {
+    log.info(`planner effort: ${settings.plannerEffort}`);
+  }
 
   const runDir = path.join(repo, settings.runRoot, runId);
   const worktreeBase = path.join(repo, settings.worktreeRoot, runId);
@@ -118,6 +122,7 @@ async function main() {
       const expanded = await expandTree(goal, {
         cwd: planningWorktree,
         model: plannerModel,
+        effort: settings.plannerEffort || undefined,
         apiKey: settings.apiKey,
         maxDepth: settings.maxDepth,
         maxLeaves: settings.maxLeaves,
@@ -410,6 +415,7 @@ function mergeSettings(base, args) {
     maxLeaves: args.maxLeaves ?? base.maxLeaves,
     concurrency: args.concurrency ?? base.concurrency,
     plannerModel: args.plannerModel ?? base.plannerModel,
+    plannerEffort: args.plannerEffort ?? base.plannerEffort,
     workerModel: args.workerModel ?? base.workerModel,
     reviewEnabled: args.noReview ? false : base.reviewEnabled,
     keepWorktrees: !!args.keepWorktrees,
@@ -443,6 +449,7 @@ function parseArgs(argv) {
       case '--concurrency': out.concurrency = int(nextValue('--concurrency'), { min: 1 }); break;
       case '--base': out.base = nextValue('--base'); break;
       case '--planner-model': out.plannerModel = nextValue('--planner-model'); break;
+      case '--planner-effort': out.plannerEffort = effort(nextValue('--planner-effort')); break;
       case '--worker-model': out.workerModel = nextValue('--worker-model'); break;
       case '--from-plan': out.fromPlan = nextValue('--from-plan'); break;
       case '--':
@@ -465,6 +472,12 @@ function int(v, { min } = {}) {
     throw new Error(`Expected a number >= ${min}, got ${n}`);
   }
   return n;
+}
+
+function effort(v) {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) throw new Error('Expected a non-empty effort level');
+  return s;
 }
 
 /**

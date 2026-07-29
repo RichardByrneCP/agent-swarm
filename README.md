@@ -90,6 +90,7 @@ agent-swarm --from-plan .swarm-runs/run-XXXX/plan.json --yes
 | `--concurrency <n>` | 4 | Parallel workers per wave. |
 | `--base <ref>` | current HEAD | Git ref to branch from. |
 | `--planner-model <id>` | auto (latest Opus) | Override planner model. |
+| `--planner-effort <lvl>` | (model default) | Planner reasoning effort (`low`/`medium`/`high`/`xhigh`/`max`; depends on model). |
 | `--worker-model <id>` | `composer-2.5` | Override worker model. |
 | `--no-review` | off | Skip the review stage. |
 | `--dry-run` | off | Plan only. |
@@ -145,7 +146,7 @@ To share with teammates or other teams:
 
 Notes for wider use:
 
-- **Model access:** the planner auto-detects the latest Opus. If a teammate lacks Opus access, they set `PLANNER_MODEL` to a model they can use. Workers default to `composer-2.5`.
+- **Model access:** the planner auto-detects the latest Opus. If a teammate lacks Opus access, they set `PLANNER_MODEL` to a model they can use. Optional `PLANNER_EFFORT` / `--planner-effort` sets reasoning effort (`high`, etc.). Workers default to `composer-2.5`.
 - **Cost:** every worker is a paid agent. On a TTY the CLI prompts before a paid run; use `--yes` to skip the prompt (required in non-interactive contexts). The skill always does a `--dry-run` first. Use `--max-leaves` to cap fan-out.
 - **Updates:** `agent-swarm --version` reports the installed version. After pulling changes, re-run `./install.sh` (macOS/Linux/WSL/Git Bash) or `powershell -ExecutionPolicy Bypass -File .\install.ps1` (native Windows).
 - **Shared context:** `.swarm/` (design decisions + field guide) is committed on the run's integration branch so workers can read it. Exclude it at merge time if you do not want it on your mainline.

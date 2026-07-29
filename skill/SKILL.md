@@ -55,7 +55,7 @@ git merge swarm/<runId>/integration            # apply, only when the user appro
 
 - Default depth/leaves (`--max-depth 2`, `--max-leaves 40`) suit most tasks.
 - Large/long tasks: `--max-depth 3 --max-leaves 150 --concurrency 6`.
-- `--no-review` to skip the review lens; `--planner-model` / `--worker-model` to override models.
+- `--no-review` to skip the review lens; `--planner-model` / `--planner-effort` / `--worker-model` to override models.
 - Re-run a saved plan: `agent-swarm --from-plan .swarm-runs/<runId>/plan.json --yes`.
 
 Run `agent-swarm --help` for the full flag reference.
@@ -63,4 +63,4 @@ Run `agent-swarm --help` for the full flag reference.
 ## Notes
 
 - Do not paste large scripts to run the swarm; always invoke the `agent-swarm` command.
-- If a teammate lacks Opus access, set `PLANNER_MODEL` to a model they can use.
+- If a teammate lacks Opus access, set `PLANNER_MODEL` (and optionally `PLANNER_EFFORT`, e.g. `high`) to a model they can use.

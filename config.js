@@ -32,6 +32,8 @@ export const config = {
 
   // Model roles. plannerModel is resolved at runtime when left empty.
   plannerModel: process.env.PLANNER_MODEL || '',
+  // Reasoning effort for the planner (e.g. low|medium|high|xhigh|max). Model-specific.
+  plannerEffort: (process.env.PLANNER_EFFORT || '').trim().toLowerCase(),
   workerModel: process.env.WORKER_MODEL || 'composer-2.5',
   reviewerModel: process.env.REVIEWER_MODEL || 'composer-2.5',
   reconcilerModel: process.env.RECONCILER_MODEL || 'composer-2.5',
